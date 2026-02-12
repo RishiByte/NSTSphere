@@ -1,0 +1,136 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  ADMIN
+  MODERATOR
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  email         String    @unique
+  password_hash String
+  avatar_url    String?
+  role          Role      @default(STUDENT)
+  xp_points     Int       @default(0)
+  created_at    DateTime  @default(now())
+
+  posts         Post[]
+  comments      Comment[]
+  votes         Vote[]
+  bookmarks     Bookmark[]
+  reports       Report[]    @relation("reporter")
+  xp_logs       XP_Log[]
+}
+
+model Subject {
+  id    String @id @default(uuid())
+  name  String @unique
+  slug  String @unique
+  posts Post[]
+}
+
+model Post {
+  id          String   @id @default(uuid())
+  title       String
+  content     String   // Rich text content
+  subject_id  String
+  author_id   String
+  vote_score  Int      @default(0)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  is_locked   Boolean  @default(false)
+  is_deleted  Boolean  @default(false)
+
+  subject     Subject  @relation(fields: [subject_id], references: [id])
+  author      User     @relation(fields: [author_id], references: [id])
+  comments    Comment[]
+  votes       Vote[]
+  bookmarks   Bookmark[]
+  reports     Report[]
+}
+
+model Comment {
+  id                String   @id @default(uuid())
+  post_id           String
+  author_id         String
+  parent_comment_id String?
+  content           String
+  vote_score        Int      @default(0)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt 
+
+  post              Post     @relation(fields: [post_id], references: [id])
+  author            User     @relation(fields: [author_id], references: [id])
+  parent            Comment? @relation("CommentReplies", fields: [parent_comment_id], references: [id])
+  replies           Comment[] @relation("CommentReplies")
+  votes             Vote[]
+}
+
+model Vote {
+  id          String  @id @default(uuid())
+  user_id     String
+  post_id     String?
+  comment_id  String?
+  vote_type   Int     // +1 or -1
+
+  user        User     @relation(fields: [user_id], references: [id])
+  post        Post?    @relation(fields: [post_id], references: [id])
+  comment     Comment? @relation(fields: [comment_id], references: [id])
+
+  @@unique([user_id, post_id])
+  @@unique([user_id, comment_id])
+}
+
+model Bookmark {
+  id        String @id @default(uuid())
+  user_id   String
+  post_id   String
+
+  user      User   @relation(fields: [user_id], references: [id])
+  post      Post   @relation(fields: [post_id], references: [id])
+
+  @@unique([user_id, post_id])
+}
+
+enum ReportStatus {
+  PENDING
+  RESOLVED
+  DISMISSED
+}
+
+model Report {
+  id          String       @id @default(uuid())
+  reporter_id String
+  post_id     String?
+  reason      String
+  status      ReportStatus @default(PENDING)
+  created_at  DateTime     @default(now())
+
+  reporter    User         @relation("reporter", fields: [reporter_id], references: [id])
+  post        Post?        @relation(fields: [post_id], references: [id])
+}
+
+enum XPSource {
+  POST_UPVOTE
+  COMMENT_UPVOTE
+  ACCEPTED_ANSWER
+}
+
+model XP_Log {
+  id          String   @id @default(uuid())
+  user_id     String
+  source_type XPSource
+  points      Int
+  created_at  DateTime @default(now())
+
+  user        User     @relation(fields: [user_id], references: [id])
+}
